@@ -3,7 +3,11 @@ import React, { useState, createContext, useContext } from 'react';
 interface DetectionContextType {
   isLoading: boolean;
   error: string | null;
-  detectPerson: (base64Image: string) => Promise<{ label: string; score: number }[]>;
+  detectPerson: (base64Image: string) => Promise<{ 
+    label: string; 
+    score: number; 
+    box: { xmin: number; ymin: number; xmax: number; ymax: number } 
+  }[]>;
 }
 
 const DetectionContext = createContext<DetectionContextType>({
@@ -53,10 +57,14 @@ export const DetectionProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
       const results = await response.json();
       
-      // Filter for 'person' with > 0.5 confidence
+      // Filter for 'person' with > 0.5 confidence and return box data
       return results.filter((item: any) => 
         item.label === 'person' && item.score > 0.5
-      );
+      ).map((item: any) => ({
+        label: item.label,
+        score: item.score,
+        box: item.box
+      }));
     } catch (err) {
       console.error('Cloud AI Error:', err);
       setError('Cloud detection failed.');
