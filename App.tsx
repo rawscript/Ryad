@@ -15,10 +15,11 @@ export default function App() {
   const [startTime] = useState(new Date());
   const [view, setView] = useState<'scan' | 'report'>('scan');
 
-  const handlePersonDetected = useCallback((image: string) => {
+  const handlePersonDetected = useCallback((images: string[]) => {
     setQueue(prev => {
-      if (prev.length > 20) return prev;
-      return [...prev, image];
+      const newQueue = [...prev, ...images];
+      if (newQueue.length > 50) return newQueue.slice(0, 50); // Increased limit for batch detections
+      return newQueue;
     });
   }, []);
 

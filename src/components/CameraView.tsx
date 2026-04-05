@@ -2,11 +2,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { CameraView as ExpoCamera, CameraType, useCameraPermissions } from 'expo-camera';
 import { RefreshCcw, AlertCircle, Scan, Cloud, Zap, Play, Square } from 'lucide-react-native';
+import * as Haptics from 'expo-haptics';
+import * as ImageManipulator from 'expo-image-manipulator';
 import { glassStyles, GLASS_COLORS } from '../theme/glass';
 import { useDetection } from './DetectionEngine';
 
 interface CameraViewProps {
-  onPersonDetected: (image: string) => void;
+  onPersonDetected: (images: string[]) => void;
   isPaused: boolean;
 }
 
@@ -31,7 +33,7 @@ export const CameraView: React.FC<CameraViewProps> = ({ onPersonDetected, isPaus
         if (cameraRef.current && !isLoading) {
           try {
             const photo = await cameraRef.current.takePictureAsync({
-              quality: 0.3, // Lower quality for faster network upload
+              quality: 0.5, // Balance for cropping quality
               base64: true,
               skipProcessing: true,
               shutterSound: false,
@@ -41,15 +43,44 @@ export const CameraView: React.FC<CameraViewProps> = ({ onPersonDetected, isPaus
               const detections = await detectPerson(photo.base64);
               
               if (detections.length > 0) {
-                onPersonDetected(`data:image/jpeg;base64,${photo.base64}`);
-                console.log(`Cloud AI: Detected ${detections.length} people.`);
+                // Tactile feedback on success
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                
+                // Process crops for each detected person
+                const cropPromises = detections.slice(0, 10).map(async (det) => {
+                  const { xmin, ymin, xmax, ymax } = det.box;
+                  const width = xmax - xmin;
+                  const height = ymax - ymin;
+                  
+                  // Add 10% padding
+                  const padX = width * 0.1;
+                  const padY = height * 0.1;
+                  
+                  const result = await ImageManipulator.manipulateAsync(
+                    `data:image/jpeg;base64,${photo.base64}`,
+                    [{
+                      crop: {
+                        originX: Math.max(0, xmin - padX),
+                        originY: Math.max(0, ymin - padY),
+                        width: Math.min(photo.width - xmin, width + 2 * padX),
+                        height: Math.min(photo.height - ymin, height + 2 * padY),
+                      }
+                    }],
+                    { base64: true, format: ImageManipulator.SaveFormat.JPEG }
+                  );
+                  return `data:image/jpeg;base64,${result.base64}`;
+                });
+
+                const croppedImages = await Promise.all(cropPromises);
+                onPersonDetected(croppedImages);
+                console.log(`Cloud AI: Detected and cropped ${detections.length} people.`);
               }
             }
           } catch (e) {
             console.error('Capture/Detection failed:', e);
           }
         }
-      }, 5000); // 5 seconds to manage API rate limits and battery
+      }, 2000); // Reduced to 2s for faster UX
     }
     return () => clearInterval(interval);
   }, [isPaused, permission, isLoading, detectPerson, onPersonDetected, isScanning]);
@@ -105,7 +136,10 @@ export const CameraView: React.FC<CameraViewProps> = ({ onPersonDetected, isPaus
           ) : (
             <TouchableOpacity 
               style={[glassStyles.darkCard, styles.bigScanButton]}
-              onPress={() => setIsScanning(true)}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                setIsScanning(true);
+              }}
             >
               <Play size={32} color="white" fill="white" />
               <Text style={styles.bigScanText}>START SCANNING</Text>
@@ -116,7 +150,10 @@ export const CameraView: React.FC<CameraViewProps> = ({ onPersonDetected, isPaus
         {isScanning && (
           <TouchableOpacity 
             style={[glassStyles.darkCard, styles.stopButton]}
-            onPress={() => setIsScanning(false)}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setIsScanning(false);
+            }}
           >
             <Square size={16} color="white" fill="white" />
             <Text style={styles.stopText}>STOP</Text>
