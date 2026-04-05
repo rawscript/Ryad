@@ -36,7 +36,7 @@ export const DetectionProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       const imageData = base64Image.split(',')[1] || base64Image;
 
       const response = await fetch(
-        'https://api-inference.huggingface.co/models/facebook/detr-resnet-50',
+        'https://router.huggingface.co/hf-inference/models/facebook/detr-resnet-50',
         {
           method: 'POST',
           headers: {

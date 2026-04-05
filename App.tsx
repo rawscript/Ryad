@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react';
-import { StyleSheet, View, Text, SafeAreaView, TouchableOpacity, ScrollView, StatusBar, Platform } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, ScrollView, StatusBar, Platform } from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { DetectionProvider } from './src/components/DetectionEngine';
 import { CameraView } from './src/components/CameraView';
@@ -34,90 +35,91 @@ export default function App() {
   };
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <DetectionProvider>
-        <SafeAreaView style={styles.container}>
-          <StatusBar barStyle="dark-content" />
-          
-          <ScrollView 
-            style={styles.scrollView} 
-            contentContainerStyle={styles.scrollContent}
-            showsVerticalScrollIndicator={false}
-          >
-            {/* Header */}
-            <View style={styles.header}>
-              <View style={styles.logoRow}>
-                <View style={styles.iconBox}>
-                  <Activity size={24} color="white" />
-                </View>
-                <View>
-                  <Text style={styles.brand}>VISION</Text>
-                  <Text style={styles.tagline}>HUMAN COUNTER AI</Text>
-                </View>
-              </View>
-              <TouchableOpacity style={styles.infoButton}>
-                <Info size={24} color={GLASS_COLORS.muted} />
-              </TouchableOpacity>
-            </View>
-
-            {view === 'scan' ? (
-              <View style={styles.content}>
-                {/* Stats Bar */}
-                <View style={styles.statsBar}>
-                  <MiniStat label="MAN" value={counts.man} color={GLASS_COLORS.primary} />
-                  <MiniStat label="WOMAN" value={counts.woman} color={GLASS_COLORS.secondary} />
-                  <MiniStat label="CHILD" value={counts.child} color={GLASS_COLORS.accent} />
-                </View>
-
-                {/* Camera Feed */}
-                <CameraView 
-                  onPersonDetected={handlePersonDetected} 
-                  isPaused={false} 
-                />
-
-                {/* Pipeline Title */}
-                <View style={styles.sectionHeader}>
-                  <Text style={styles.sectionTitle}>DETECTION PIPELINE</Text>
-                  <View style={styles.badge}>
-                    <Text style={styles.badgeText}>{queue.length} PENDING</Text>
+    <SafeAreaProvider>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <DetectionProvider>
+          <SafeAreaView style={styles.container}>
+            <StatusBar barStyle="dark-content" />
+            
+            <ScrollView 
+              style={styles.scrollView} 
+              contentContainerStyle={styles.scrollContent}
+              showsVerticalScrollIndicator={false}
+            >
+              {/* Header */}
+              <View style={styles.header}>
+                <View style={styles.logoRow}>
+                  <View style={styles.iconBox}>
+                    <Activity size={24} color="white" />
+                  </View>
+                  <View>
+                    <Text style={styles.brand}>VISION</Text>
+                    <Text style={styles.tagline}>HUMAN COUNTER AI</Text>
                   </View>
                 </View>
-
-                {/* Interaction Stack */}
-                <SwipeStack 
-                  queue={queue} 
-                  onSwipe={handleSwipe} 
-                />
-
-                {/* Finalize Button */}
-                {/* Finalize Button */}
-                <TouchableOpacity 
-                  style={[styles.finalizeButton, { opacity: queue.length > 0 ? 0.6 : 1 }]} 
-                  onPress={handleFinish}
-                >
-                  <Text style={styles.finalizeText}>{queue.length > 0 ? 'COMPLETE REVIEW FIRST' : 'GENERATE REPORT'}</Text>
-                  <BarChart3 size={20} color="white" />
+                <TouchableOpacity style={styles.infoButton}>
+                  <Info size={24} color={GLASS_COLORS.muted} />
                 </TouchableOpacity>
               </View>
-            ) : (
-              <ReportView 
-                counts={counts} 
-                startTime={startTime} 
-                endTime={new Date()} 
-                onReset={handleReset} 
-              />
-            )}
-          </ScrollView>
 
-          {/* Floating Navigation Decoration (Mobile Style) */}
-          <View style={styles.floatingNav}>
-            <Layers size={20} color={GLASS_COLORS.muted} />
-            <Users size={20} color={GLASS_COLORS.primary} />
-            <BarChart3 size={20} color={GLASS_COLORS.muted} />
-          </View>
-        </SafeAreaView>
-      </DetectionProvider>
-    </GestureHandlerRootView>
+              {view === 'scan' ? (
+                <View style={styles.content}>
+                  {/* Stats Bar */}
+                  <View style={styles.statsBar}>
+                    <MiniStat label="MAN" value={counts.man} color={GLASS_COLORS.primary} />
+                    <MiniStat label="WOMAN" value={counts.woman} color={GLASS_COLORS.secondary} />
+                    <MiniStat label="CHILD" value={counts.child} color={GLASS_COLORS.accent} />
+                  </View>
+
+                  {/* Camera Feed */}
+                  <CameraView 
+                    onPersonDetected={handlePersonDetected} 
+                    isPaused={false} 
+                  />
+
+                  {/* Pipeline Title */}
+                  <View style={styles.sectionHeader}>
+                    <Text style={styles.sectionTitle}>DETECTION PIPELINE</Text>
+                    <View style={styles.badge}>
+                      <Text style={styles.badgeText}>{queue.length} PENDING</Text>
+                    </View>
+                  </View>
+
+                  {/* Interaction Stack */}
+                  <SwipeStack 
+                    queue={queue} 
+                    onSwipe={handleSwipe} 
+                  />
+
+                  {/* Finalize Button */}
+                  <TouchableOpacity 
+                    style={[styles.finalizeButton, { opacity: queue.length > 0 ? 0.6 : 1 }]} 
+                    onPress={handleFinish}
+                  >
+                    <Text style={styles.finalizeText}>{queue.length > 0 ? 'COMPLETE REVIEW FIRST' : 'GENERATE REPORT'}</Text>
+                    <BarChart3 size={20} color="white" />
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <ReportView 
+                  counts={counts} 
+                  startTime={startTime} 
+                  endTime={new Date()} 
+                  onReset={handleReset} 
+                />
+              )}
+            </ScrollView>
+
+            {/* Floating Navigation Decoration (Mobile Style) */}
+            <View style={styles.floatingNav}>
+              <Layers size={20} color={GLASS_COLORS.muted} />
+              <Users size={20} color={GLASS_COLORS.primary} />
+              <BarChart3 size={20} color={GLASS_COLORS.muted} />
+            </View>
+          </SafeAreaView>
+        </DetectionProvider>
+      </GestureHandlerRootView>
+    </SafeAreaProvider>
   );
 }
 

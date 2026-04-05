@@ -79,7 +79,10 @@ export const CameraView: React.FC<CameraViewProps> = ({ onPersonDetected, isPaus
         ref={cameraRef}
         style={styles.camera} 
         facing={facing}
-      >
+      />
+      
+      {/* Overlay for HUD and Controls */}
+      <View style={StyleSheet.absoluteFill}>
         {/* HUD Overlay */}
         <View style={styles.hud}>
           <View style={[glassStyles.darkCard, styles.statusBadge]}>
@@ -124,7 +127,7 @@ export const CameraView: React.FC<CameraViewProps> = ({ onPersonDetected, isPaus
           <Zap size={14} color="white" style={{ opacity: 0.8 }} strokeWidth={2} />
           <Text style={styles.footerText}>CLOUD-POWERED AI DETECTION</Text>
         </View>
-      </ExpoCamera>
+      </View>
     </View>
   );
 };
