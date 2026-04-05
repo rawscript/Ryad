@@ -2,29 +2,83 @@ import React, { useState, useCallback } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, ScrollView, StatusBar, Platform } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { DetectionProvider } from './src/components/DetectionEngine';
+import * as ImageManipulator from 'expo-image-manipulator';
+import { DetectionProvider, useDetection } from './src/components/DetectionEngine';
 import { CameraView } from './src/components/CameraView';
+import { ProcessingView } from './src/components/ProcessingView';
 import { SwipeStack } from './src/components/SwipeStack';
 import { ReportView } from './src/components/ReportView';
 import { Activity, Layers, Info, Users, BarChart3, ChevronRight } from 'lucide-react-native';
 import { GLASS_COLORS } from './src/theme/glass';
 
 export default function App() {
+  return (
+    <SafeAreaProvider>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <DetectionProvider>
+          <MainContent />
+        </DetectionProvider>
+      </GestureHandlerRootView>
+    </SafeAreaProvider>
+  );
+}
+
+function MainContent() {
   const [counts, setCounts] = useState({ man: 0, woman: 0, child: 0 });
   const [queue, setQueue] = useState<string[]>([]);
+  const [shots, setShots] = useState<string[]>([]);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [startTime] = useState(new Date());
-  const [view, setView] = useState<'scan' | 'report'>('scan');
+  const [view, setView] = useState<'capture' | 'review' | 'report'>('capture');
+  const { detectPerson } = useDetection();
 
-  const handlePersonDetected = useCallback((images: string[]) => {
-    setQueue(prev => {
-      const newQueue = [...prev, ...images];
-      if (newQueue.length > 50) return newQueue.slice(0, 50); // Increased limit for batch detections
-      return newQueue;
-    });
+  const handleCapture = useCallback((image: string) => {
+    setShots(prev => [...prev, image]);
   }, []);
 
-  const handleSwipe = useCallback((type: 'man' | 'woman' | 'child', _: string) => {
-    setCounts(prev => ({ ...prev, [type]: prev[type] + 1 }));
+  const processCaptures = async () => {
+    if (shots.length === 0) return;
+    setIsProcessing(true);
+    
+    try {
+      let allCrops: string[] = [];
+      for (const shot of shots) {
+        // We need the photo dimensions for cropping, but DETR returns absolute pixels.
+        // The detectPerson function handles the API call.
+        // We'll move the cropping logic to a utility or keep it in the loop if we have access to dimensions.
+        // For now, let's assume detectPerson returns base64 crops for us if we update it, 
+        // or we handle it here.
+        
+        // Wait, the current detectPerson in DetectionEngine returns {label, score, box}.
+        // I should probably make a helper to process a single shot and return crops.
+        const detections = await detectPerson(shot);
+        if (detections.length > 0) {
+          // Perform cropping (same logic as before in CameraView but centralised)
+          const crops = await Promise.all(detections.slice(0, 15).map(async (det) => {
+            const { xmin, ymin, xmax, ymax } = det.box;
+            const result = await ImageManipulator.manipulateAsync(
+              shot.startsWith('data:') ? shot : `data:image/jpeg;base64,${shot}`,
+              [{ crop: { originX: xmin, originY: ymin, width: xmax - xmin, height: ymax - ymin } }],
+              { base64: true, format: ImageManipulator.SaveFormat.JPEG }
+            );
+            return `data:image/jpeg;base64,${result.base64}`;
+          }));
+          allCrops = [...allCrops, ...crops];
+        }
+      }
+      setQueue(allCrops);
+      setView('review');
+    } catch (err) {
+      console.error('Batch processing failed:', err);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleSwipe = useCallback((type: 'man' | 'woman' | 'child' | 'ignore', _: string) => {
+    if (type !== 'ignore') {
+      setCounts(prev => ({ ...prev, [type]: prev[type] + 1 }));
+    }
   }, []);
 
   const handleFinish = () => setView('report');
@@ -32,95 +86,103 @@ export default function App() {
   const handleReset = () => {
     setCounts({ man: 0, woman: 0, child: 0 });
     setQueue([]);
-    setView('scan');
+    setShots([]);
+    setView('capture');
   };
 
+  if (isProcessing) return <ProcessingView />;
+
   return (
-    <SafeAreaProvider>
-      <GestureHandlerRootView style={{ flex: 1 }}>
-        <DetectionProvider>
-          <SafeAreaView style={styles.container}>
-            <StatusBar barStyle="dark-content" />
-            
-            <ScrollView 
-              style={styles.scrollView} 
-              contentContainerStyle={styles.scrollContent}
-              showsVerticalScrollIndicator={false}
-            >
-              {/* Header */}
-              <View style={styles.header}>
-                <View style={styles.logoRow}>
-                  <View style={styles.iconBox}>
-                    <Activity size={24} color="white" />
-                  </View>
-                  <View>
-                    <Text style={styles.brand}>VISION</Text>
-                    <Text style={styles.tagline}>HUMAN COUNTER AI</Text>
-                  </View>
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" />
+      
+      <ScrollView 
+        style={styles.scrollView} 
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={styles.logoRow}>
+            <View style={styles.iconBox}>
+              <Activity size={24} color="white" />
+            </View>
+            <View>
+              <Text style={styles.brand}>VISION</Text>
+              <Text style={styles.tagline}>HUMAN COUNTER AI</Text>
+            </View>
+          </View>
+          <TouchableOpacity style={styles.infoButton}>
+            <Info size={24} color={GLASS_COLORS.muted} />
+          </TouchableOpacity>
+        </View>
+
+        {view === 'capture' ? (
+          <View style={styles.content}>
+            {/* Stats Bar */}
+            <View style={styles.statsBar}>
+              <MiniStat label="MAN" value={counts.man} color={GLASS_COLORS.primary} />
+              <MiniStat label="WOMAN" value={counts.woman} color={GLASS_COLORS.secondary} />
+              <MiniStat label="CHILD" value={counts.child} color={GLASS_COLORS.accent} />
+            </View>
+
+            {/* Camera Feed */}
+            <CameraView 
+              onCapture={handleCapture}
+              shotCount={shots.length}
+              onProcess={processCaptures}
+              isPaused={false} 
+            />
+
+            {/* Pipeline Status */}
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>CAPTURED SESSIONS</Text>
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{shots.length} SHOTS</Text>
+              </View>
+            </View>
+          </View>
+        ) : view === 'review' ? (
+          <View style={styles.content}>
+             <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>REVIEWING DETECTIONS</Text>
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>{queue.length} REMAINING</Text>
                 </View>
-                <TouchableOpacity style={styles.infoButton}>
-                  <Info size={24} color={GLASS_COLORS.muted} />
-                </TouchableOpacity>
               </View>
 
-              {view === 'scan' ? (
-                <View style={styles.content}>
-                  {/* Stats Bar */}
-                  <View style={styles.statsBar}>
-                    <MiniStat label="MAN" value={counts.man} color={GLASS_COLORS.primary} />
-                    <MiniStat label="WOMAN" value={counts.woman} color={GLASS_COLORS.secondary} />
-                    <MiniStat label="CHILD" value={counts.child} color={GLASS_COLORS.accent} />
-                  </View>
+            {/* Interaction Stack */}
+            <SwipeStack 
+              queue={queue} 
+              onSwipe={handleSwipe} 
+            />
 
-                  {/* Camera Feed */}
-                  <CameraView 
-                    onPersonDetected={handlePersonDetected} 
-                    isPaused={false} 
-                  />
+            {/* Finalize Button */}
+            <TouchableOpacity 
+              style={[styles.finalizeButton, { opacity: queue.length > 50 ? 0.6 : 1 }]} 
+              onPress={handleFinish}
+            >
+              <Text style={styles.finalizeText}>GENERATE FINAL REPORT</Text>
+              <BarChart3 size={20} color="white" />
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <ReportView 
+            counts={counts} 
+            startTime={startTime} 
+            endTime={new Date()} 
+            onReset={handleReset} 
+          />
+        )}
+      </ScrollView>
 
-                  {/* Pipeline Title */}
-                  <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionTitle}>DETECTION PIPELINE</Text>
-                    <View style={styles.badge}>
-                      <Text style={styles.badgeText}>{queue.length} PENDING</Text>
-                    </View>
-                  </View>
-
-                  {/* Interaction Stack */}
-                  <SwipeStack 
-                    queue={queue} 
-                    onSwipe={handleSwipe} 
-                  />
-
-                  {/* Finalize Button */}
-                  <TouchableOpacity 
-                    style={[styles.finalizeButton, { opacity: queue.length > 0 ? 0.6 : 1 }]} 
-                    onPress={handleFinish}
-                  >
-                    <Text style={styles.finalizeText}>{queue.length > 0 ? 'COMPLETE REVIEW FIRST' : 'GENERATE REPORT'}</Text>
-                    <BarChart3 size={20} color="white" />
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                <ReportView 
-                  counts={counts} 
-                  startTime={startTime} 
-                  endTime={new Date()} 
-                  onReset={handleReset} 
-                />
-              )}
-            </ScrollView>
-
-            {/* Floating Navigation Decoration (Mobile Style) */}
-            <View style={styles.floatingNav}>
-              <Layers size={20} color={GLASS_COLORS.muted} />
-              <Users size={20} color={GLASS_COLORS.primary} />
-              <BarChart3 size={20} color={GLASS_COLORS.muted} />
-            </View>
-          </SafeAreaView>
-        </DetectionProvider>
-      </GestureHandlerRootView>
-    </SafeAreaProvider>
+      {/* Floating Navigation Decoration (Mobile Style) */}
+      <View style={styles.floatingNav}>
+        <Layers size={20} color={GLASS_COLORS.muted} />
+        <Users size={20} color={GLASS_COLORS.primary} />
+        <BarChart3 size={20} color={GLASS_COLORS.muted} />
+      </View>
+    </SafeAreaView>
   );
 }
 
