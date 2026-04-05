@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { Camera, CameraType } from 'expo-camera';
+import { CameraView as ExpoCamera, CameraType, useCameraPermissions } from 'expo-camera';
 import { RefreshCcw, AlertCircle, Scan, Cloud, Zap } from 'lucide-react-native';
 import { glassStyles, GLASS_COLORS } from '../theme/glass';
 import { useDetection } from './DetectionEngine';
@@ -11,22 +11,21 @@ interface CameraViewProps {
 }
 
 export const CameraView: React.FC<CameraViewProps> = ({ onPersonDetected, isPaused }) => {
-  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
-  const [type, setType] = useState(CameraType.back);
-  const cameraRef = useRef<Camera>(null);
+  const [permission, requestPermission] = useCameraPermissions();
+  const [facing, setFacing] = useState<CameraType>('back');
+  const cameraRef = useRef<ExpoCamera>(null);
   const { detectPerson, isLoading } = useDetection();
 
   useEffect(() => {
-    (async () => {
-      const { status } = await Camera.requestCameraPermissionsAsync();
-      setHasPermission(status === 'granted');
-    })();
-  }, []);
+    if (permission && !permission.granted && permission.canAskAgain) {
+      requestPermission();
+    }
+  }, [permission]);
 
   // Frame capture logic for Cloud Detection
   useEffect(() => {
     let interval: NodeJS.Timeout;
-    if (!isPaused && hasPermission) {
+    if (!isPaused && permission?.granted) {
       interval = setInterval(async () => {
         if (cameraRef.current && !isLoading) {
           try {
@@ -51,9 +50,9 @@ export const CameraView: React.FC<CameraViewProps> = ({ onPersonDetected, isPaus
       }, 5000); // 5 seconds to manage API rate limits and battery
     }
     return () => clearInterval(interval);
-  }, [isPaused, hasPermission, isLoading, detectPerson, onPersonDetected]);
+  }, [isPaused, permission, isLoading, detectPerson, onPersonDetected]);
 
-  if (hasPermission === null) {
+  if (!permission) {
     return (
       <View style={styles.centered}>
         <ActivityIndicator color={GLASS_COLORS.primary} size="large" />
@@ -62,7 +61,7 @@ export const CameraView: React.FC<CameraViewProps> = ({ onPersonDetected, isPaus
     );
   }
 
-  if (hasPermission === false) {
+  if (!permission.granted) {
     return (
       <View style={styles.centered}>
         <AlertCircle size={48} color={GLASS_COLORS.secondary} strokeWidth={1.5} />
@@ -74,11 +73,10 @@ export const CameraView: React.FC<CameraViewProps> = ({ onPersonDetected, isPaus
 
   return (
     <View style={styles.container}>
-      <Camera 
+      <ExpoCamera 
         ref={cameraRef}
         style={styles.camera} 
-        type={type}
-        autoFocus={true}
+        facing={facing}
       >
         {/* HUD Overlay */}
         <View style={styles.hud}>
@@ -90,7 +88,7 @@ export const CameraView: React.FC<CameraViewProps> = ({ onPersonDetected, isPaus
           
           <TouchableOpacity 
             style={styles.flipButton} 
-            onPress={() => setType(type === CameraType.back ? CameraType.front : CameraType.back)}
+            onPress={() => setFacing(facing === 'back' ? 'front' : 'back')}
           >
             <RefreshCcw size={18} color="white" />
           </TouchableOpacity>
@@ -105,7 +103,7 @@ export const CameraView: React.FC<CameraViewProps> = ({ onPersonDetected, isPaus
           <Zap size={14} color="white" style={{ opacity: 0.8 }} strokeWidth={2} />
           <Text style={styles.footerText}>CLOUD-POWERED AI DETECTION</Text>
         </View>
-      </Camera>
+      </ExpoCamera>
     </View>
   );
 };
