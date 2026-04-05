@@ -10,7 +10,7 @@ import Animated, {
   Extrapolation,
   SharedValue
 } from 'react-native-reanimated';
-import { User, Users, Baby, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, CheckCircle } from 'lucide-react-native';
+import { User, Users, Baby, Trash2, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, CheckCircle } from 'lucide-react-native';
 import { glassStyles, GLASS_COLORS } from '../theme/glass';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -18,13 +18,13 @@ const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.25;
 
 interface SwipeStackProps {
   queue: string[];
-  onSwipe: (type: 'man' | 'woman' | 'child', image: string) => void;
+  onSwipe: (type: 'man' | 'woman' | 'child' | 'ignore', image: string) => void;
 }
 
 export const SwipeStack: React.FC<SwipeStackProps> = ({ queue, onSwipe }) => {
   const [index, setIndex] = useState(0);
 
-  const handleNext = (type: 'man' | 'woman' | 'child') => {
+  const handleNext = (type: 'man' | 'woman' | 'child' | 'ignore') => {
     onSwipe(type, queue[index]);
     setIndex(prev => prev + 1);
   };
@@ -41,6 +41,13 @@ export const SwipeStack: React.FC<SwipeStackProps> = ({ queue, onSwipe }) => {
 
   return (
     <View style={styles.container}>
+      {/* Background Cards for visual depth */}
+      {index + 1 < queue.length && (
+        <View style={[styles.card, styles.cardBack, glassStyles.card]}>
+           <Image source={{ uri: queue[index + 1] }} style={[styles.image, { opacity: 0.3 }]} blurRadius={10} />
+        </View>
+      )}
+
       <SwipeCard 
         key={index}
         image={queue[index]}
@@ -49,15 +56,20 @@ export const SwipeStack: React.FC<SwipeStackProps> = ({ queue, onSwipe }) => {
       
       {/* Help Indicators */}
       <View style={styles.indicators}>
-        <Indicator icon={<ChevronLeft size={14} color="#94a3b8" />} label="WOMAN" />
-        <Indicator icon={<ChevronUp size={14} color="#94a3b8" />} label="CHILD" />
-        <Indicator icon={<ChevronRight size={14} color="#94a3b8" />} label="MAN" />
+        <View style={styles.indicatorRow}>
+            <Indicator icon={<ChevronLeft size={16} color={GLASS_COLORS.secondary} />} label="FEMALE" />
+            <View style={styles.verticalIndicators}>
+                <Indicator icon={<ChevronUp size={16} color="#ef4444" />} label="IGNORE" />
+                <Indicator icon={<ChevronDown size={16} color={GLASS_COLORS.accent} />} label="CHILD" />
+            </View>
+            <Indicator icon={<ChevronRight size={16} color={GLASS_COLORS.primary} />} label="MALE" />
+        </View>
       </View>
     </View>
   );
 };
 
-const SwipeCard: React.FC<{ image: string; onSwipe: (type: 'man' | 'woman' | 'child') => void }> = ({ image, onSwipe }) => {
+const SwipeCard: React.FC<{ image: string; onSwipe: (type: 'man' | 'woman' | 'child' | 'ignore') => void }> = ({ image, onSwipe }) => {
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
 
@@ -67,13 +79,21 @@ const SwipeCard: React.FC<{ image: string; onSwipe: (type: 'man' | 'woman' | 'ch
       translateY.value = event.translationY;
     })
     .onEnd((event) => {
-      if (Math.abs(event.translationX) > SWIPE_THRESHOLD) {
+      const absX = Math.abs(event.translationX);
+      const absY = Math.abs(event.translationY);
+
+      if (absX > absY && absX > SWIPE_THRESHOLD) {
+        // Horizontal Swipe
         const type = event.translationX > 0 ? 'man' : 'woman';
-        translateX.value = withSpring(event.translationX > 0 ? SCREEN_WIDTH : -SCREEN_WIDTH);
-        runOnJS(onSwipe)(type);
-      } else if (Math.abs(event.translationY) > SWIPE_THRESHOLD) {
-        translateY.value = withSpring(event.translationY > 0 ? SCREEN_HEIGHT : -SCREEN_HEIGHT);
-        runOnJS(onSwipe)('child');
+        translateX.value = withSpring(event.translationX > 0 ? SCREEN_WIDTH : -SCREEN_WIDTH, {}, () => {
+            runOnJS(onSwipe)(type);
+        });
+      } else if (absY > absX && absY > SWIPE_THRESHOLD) {
+        // Vertical Swipe
+        const type = event.translationY > 0 ? 'child' : 'ignore';
+        translateY.value = withSpring(event.translationY > 0 ? SCREEN_HEIGHT : -SCREEN_HEIGHT, {}, () => {
+            runOnJS(onSwipe)(type);
+        });
       } else {
         translateX.value = withSpring(0);
         translateY.value = withSpring(0);
@@ -84,7 +104,7 @@ const SwipeCard: React.FC<{ image: string; onSwipe: (type: 'man' | 'woman' | 'ch
     transform: [
       { translateX: translateX.value },
       { translateY: translateY.value },
-      { rotate: `${interpolate(translateX.value, [-SCREEN_WIDTH, SCREEN_WIDTH], [-15, 15], Extrapolation.CLAMP)}deg` }
+      { rotate: `${interpolate(translateX.value, [-SCREEN_WIDTH, SCREEN_WIDTH], [-10, 10], Extrapolation.CLAMP)}deg` }
     ],
   }));
 
@@ -93,7 +113,7 @@ const SwipeCard: React.FC<{ image: string; onSwipe: (type: 'man' | 'woman' | 'ch
       <Animated.View style={[styles.card, glassStyles.card, animatedStyle]}>
         <Image source={{ uri: image }} style={styles.image} resizeMode="cover" />
         
-        {/* Dynamic State Badges */}
+        {/* Dynamic State Overlays */}
         <AnimatedOverlay x={translateX} y={translateY} />
       </Animated.View>
     </GestureDetector>
@@ -101,20 +121,40 @@ const SwipeCard: React.FC<{ image: string; onSwipe: (type: 'man' | 'woman' | 'ch
 };
 
 const AnimatedOverlay: React.FC<{ x: SharedValue<number>; y: SharedValue<number> }> = ({ x, y }) => {
-  const manOpacity = useAnimatedStyle(() => ({ opacity: interpolate(x.value, [0, 100], [0, 1], Extrapolation.CLAMP) }));
-  const womanOpacity = useAnimatedStyle(() => ({ opacity: interpolate(x.value, [0, -100], [0, 1], Extrapolation.CLAMP) }));
-  const childOpacity = useAnimatedStyle(() => ({ opacity: interpolate(Math.abs(y.value), [0, 100], [0, 1], Extrapolation.CLAMP) }));
+  const manOpacity = useAnimatedStyle(() => ({ 
+    opacity: interpolate(x.value, [0, 80], [0, 1], Extrapolation.CLAMP),
+    transform: [{ scale: interpolate(x.value, [0, 80], [0.5, 1], Extrapolation.CLAMP) }]
+  }));
+  const womanOpacity = useAnimatedStyle(() => ({ 
+    opacity: interpolate(x.value, [0, -80], [0, 1], Extrapolation.CLAMP),
+    transform: [{ scale: interpolate(x.value, [0, -80], [0.5, 1], Extrapolation.CLAMP) }]
+  }));
+  const childOpacity = useAnimatedStyle(() => ({ 
+    opacity: interpolate(y.value, [0, 80], [0, 1], Extrapolation.CLAMP),
+    transform: [{ scale: interpolate(y.value, [0, 80], [0.5, 1], Extrapolation.CLAMP) }]
+  }));
+  const ignoreOpacity = useAnimatedStyle(() => ({ 
+    opacity: interpolate(y.value, [0, -80], [0, 1], Extrapolation.CLAMP),
+    transform: [{ scale: interpolate(y.value, [0, -80], [0.5, 1], Extrapolation.CLAMP) }]
+  }));
 
   return (
     <>
       <Animated.View style={[styles.overlay, styles.manOverlay, manOpacity]}>
-        <User size={32} color="white" />
+        <User size={40} color="white" />
+        <Text style={styles.overlayText}>MALE</Text>
       </Animated.View>
       <Animated.View style={[styles.overlay, styles.womanOverlay, womanOpacity]}>
-        <Users size={32} color="white" />
+        <Users size={40} color="white" />
+        <Text style={styles.overlayText}>FEMALE</Text>
       </Animated.View>
       <Animated.View style={[styles.overlay, styles.childOverlay, childOpacity]}>
-        <Baby size={32} color="white" />
+        <Baby size={40} color="white" />
+        <Text style={styles.overlayText}>CHILD</Text>
+      </Animated.View>
+      <Animated.View style={[styles.overlay, styles.ignoreOverlay, ignoreOpacity]}>
+        <Trash2 size={40} color="white" />
+        <Text style={styles.overlayText}>IGNORE</Text>
       </Animated.View>
     </>
   );
@@ -128,17 +168,22 @@ const Indicator: React.FC<{ icon: React.ReactNode; label: string }> = ({ icon, l
 );
 
 const styles = StyleSheet.create({
-  container: { width: '100%', height: 400, alignItems: 'center', justifyContent: 'center' },
-  card: { width: SCREEN_WIDTH * 0.8, height: '100%', elevation: 10 },
+  container: { width: '100%', height: 420, alignItems: 'center', justifyContent: 'center', marginTop: 20 },
+  card: { width: SCREEN_WIDTH * 0.85, height: '100%', borderRadius: 32, overflow: 'hidden', backgroundColor: 'white', elevation: 12 },
+  cardBack: { position: 'absolute', transform: [{ scale: 0.9 }, { translateY: 15 }], opacity: 0.5, zIndex: -1 },
   image: { width: '100%', height: '100%' },
-  emptyContainer: { alignItems: 'center', justifyContent: 'center', padding: 40 },
-  emptyText: { fontSize: 16, fontWeight: '900', color: GLASS_COLORS.text, letterSpacing: 2, marginTop: 16 },
-  emptySubtext: { fontSize: 10, fontWeight: '700', color: GLASS_COLORS.muted, letterSpacing: 1, marginTop: 4 },
-  overlay: { position: 'absolute', top: 20, padding: 12, borderRadius: 100 },
-  manOverlay: { right: 20, backgroundColor: GLASS_COLORS.primary },
-  womanOverlay: { left: 20, backgroundColor: GLASS_COLORS.secondary },
-  childOverlay: { bottom: 20, alignSelf: 'center', backgroundColor: GLASS_COLORS.accent },
-  indicators: { flexDirection: 'row', justifyContent: 'space-between', width: '100%', position: 'absolute', bottom: -50, paddingHorizontal: 40 },
-  indicatorItem: { alignItems: 'center', opacity: 0.6 },
-  indicatorLabel: { fontSize: 8, fontWeight: '900', color: '#94a3b8', letterSpacing: 1, marginTop: 4 }
+  emptyContainer: { alignItems: 'center', justifyContent: 'center', padding: 40, borderRadius: 32 },
+  emptyText: { fontSize: 16, fontWeight: '900', color: '#0f172a', letterSpacing: 2, marginTop: 16 },
+  emptySubtext: { fontSize: 10, fontWeight: '700', color: '#94a3b8', letterSpacing: 1, marginTop: 4 },
+  overlay: { position: 'absolute', inset: 0, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.3)' },
+  manOverlay: { backgroundColor: 'rgba(59, 130, 246, 0.6)' },
+  womanOverlay: { backgroundColor: 'rgba(236, 72, 153, 0.6)' },
+  childOverlay: { backgroundColor: 'rgba(16, 185, 129, 0.6)' },
+  ignoreOverlay: { backgroundColor: 'rgba(239, 68, 68, 0.6)' },
+  overlayText: { color: 'white', fontSize: 24, fontWeight: '900', marginTop: 12, letterSpacing: 2 },
+  indicators: { width: '100%', paddingHorizontal: 32, marginTop: 40 },
+  indicatorRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  verticalIndicators: { alignItems: 'center', gap: 12 },
+  indicatorItem: { alignItems: 'center', gap: 6 },
+  indicatorLabel: { fontSize: 10, fontWeight: '900', color: '#94a3b8', letterSpacing: 1 }
 });
