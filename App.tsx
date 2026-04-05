@@ -64,15 +64,15 @@ export default function App() {
               <View style={styles.content}>
                 {/* Stats Bar */}
                 <View style={styles.statsBar}>
-                  <MiniStat label="MEN" value={counts.man} color={GLASS_COLORS.primary} />
-                  <MiniStat label="WOMEN" value={counts.woman} color={GLASS_COLORS.secondary} />
-                  <MiniStat label="KIDS" value={counts.child} color={GLASS_COLORS.accent} />
+                  <MiniStat label="MAN" value={counts.man} color={GLASS_COLORS.primary} />
+                  <MiniStat label="WOMAN" value={counts.woman} color={GLASS_COLORS.secondary} />
+                  <MiniStat label="CHILD" value={counts.child} color={GLASS_COLORS.accent} />
                 </View>
 
                 {/* Camera Feed */}
                 <CameraView 
                   onPersonDetected={handlePersonDetected} 
-                  isPaused={view === 'report'} 
+                  isPaused={false} 
                 />
 
                 {/* Pipeline Title */}
@@ -90,8 +90,12 @@ export default function App() {
                 />
 
                 {/* Finalize Button */}
-                <TouchableOpacity style={styles.finalizeButton} onPress={handleFinish}>
-                  <Text style={styles.finalizeText}>FINALISE SCAN</Text>
+                {/* Finalize Button */}
+                <TouchableOpacity 
+                  style={[styles.finalizeButton, { opacity: queue.length > 0 ? 0.6 : 1 }]} 
+                  onPress={handleFinish}
+                >
+                  <Text style={styles.finalizeText}>{queue.length > 0 ? 'COMPLETE REVIEW FIRST' : 'GENERATE REPORT'}</Text>
                   <BarChart3 size={20} color="white" />
                 </TouchableOpacity>
               </View>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { CameraView as ExpoCamera, CameraType, useCameraPermissions } from 'expo-camera';
-import { RefreshCcw, AlertCircle, Scan, Cloud, Zap } from 'lucide-react-native';
+import { RefreshCcw, AlertCircle, Scan, Cloud, Zap, Play, Square } from 'lucide-react-native';
 import { glassStyles, GLASS_COLORS } from '../theme/glass';
 import { useDetection } from './DetectionEngine';
 
@@ -13,6 +13,7 @@ interface CameraViewProps {
 export const CameraView: React.FC<CameraViewProps> = ({ onPersonDetected, isPaused }) => {
   const [permission, requestPermission] = useCameraPermissions();
   const [facing, setFacing] = useState<CameraType>('back');
+  const [isScanning, setIsScanning] = useState(false);
   const cameraRef = useRef<ExpoCamera>(null);
   const { detectPerson, isLoading } = useDetection();
 
@@ -25,7 +26,7 @@ export const CameraView: React.FC<CameraViewProps> = ({ onPersonDetected, isPaus
   // Frame capture logic for Cloud Detection
   useEffect(() => {
     let interval: NodeJS.Timeout;
-    if (!isPaused && permission?.granted) {
+    if (!isPaused && permission?.granted && isScanning) {
       interval = setInterval(async () => {
         if (cameraRef.current && !isLoading) {
           try {
@@ -33,6 +34,7 @@ export const CameraView: React.FC<CameraViewProps> = ({ onPersonDetected, isPaus
               quality: 0.3, // Lower quality for faster network upload
               base64: true,
               skipProcessing: true,
+              shutterSound: false,
             });
             
             if (photo.base64) {
@@ -50,7 +52,7 @@ export const CameraView: React.FC<CameraViewProps> = ({ onPersonDetected, isPaus
       }, 5000); // 5 seconds to manage API rate limits and battery
     }
     return () => clearInterval(interval);
-  }, [isPaused, permission, isLoading, detectPerson, onPersonDetected]);
+  }, [isPaused, permission, isLoading, detectPerson, onPersonDetected, isScanning]);
 
   if (!permission) {
     return (
@@ -81,9 +83,9 @@ export const CameraView: React.FC<CameraViewProps> = ({ onPersonDetected, isPaus
         {/* HUD Overlay */}
         <View style={styles.hud}>
           <View style={[glassStyles.darkCard, styles.statusBadge]}>
-            <View style={[styles.pulse, { backgroundColor: isLoading ? GLASS_COLORS.accent : '#22c55e' }]} />
+            <View style={[styles.pulse, { backgroundColor: !isScanning ? '#94a3b8' : (isLoading ? GLASS_COLORS.accent : '#22c55e') }]} />
             <Cloud size={10} color="white" />
-            <Text style={styles.statusText}>{isLoading ? 'ANALYSING' : 'SCANNING'}</Text>
+            <Text style={styles.statusText}>{!isScanning ? 'IDLE' : (isLoading ? 'ANALYSING' : 'SCANNING')}</Text>
           </View>
           
           <TouchableOpacity 
@@ -94,10 +96,29 @@ export const CameraView: React.FC<CameraViewProps> = ({ onPersonDetected, isPaus
           </TouchableOpacity>
         </View>
 
-        {/* Scan Brackets */}
         <View style={styles.brackets}>
-          <Scan size={120} color="white" strokeWidth={0.5} style={{ opacity: 0.3 }} />
+          {isScanning ? (
+            <Scan size={120} color="white" strokeWidth={0.5} style={{ opacity: 0.3 }} />
+          ) : (
+            <TouchableOpacity 
+              style={[glassStyles.darkCard, styles.bigScanButton]}
+              onPress={() => setIsScanning(true)}
+            >
+              <Play size={32} color="white" fill="white" />
+              <Text style={styles.bigScanText}>START SCANNING</Text>
+            </TouchableOpacity>
+          )}
         </View>
+
+        {isScanning && (
+          <TouchableOpacity 
+            style={[glassStyles.darkCard, styles.stopButton]}
+            onPress={() => setIsScanning(false)}
+          >
+            <Square size={16} color="white" fill="white" />
+            <Text style={styles.stopText}>STOP</Text>
+          </TouchableOpacity>
+        )}
 
         <View style={styles.footer}>
           <Zap size={14} color="white" style={{ opacity: 0.8 }} strokeWidth={2} />
@@ -122,5 +143,9 @@ const styles = StyleSheet.create({
   flipButton: { width: 40, height: 40, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   brackets: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   footer: { position: 'absolute', bottom: 20, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 8 },
-  footerText: { color: 'white', fontSize: 8, fontWeight: '900', letterSpacing: 2, opacity: 0.8 }
+  footerText: { color: 'white', fontSize: 8, fontWeight: '900', letterSpacing: 2, opacity: 0.8 },
+  bigScanButton: { paddingHorizontal: 32, paddingVertical: 20, borderRadius: 24, alignItems: 'center', justifyContent: 'center', gap: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
+  bigScanText: { color: 'white', fontSize: 12, fontWeight: '900', letterSpacing: 2 },
+  stopButton: { position: 'absolute', bottom: 60, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 100, backgroundColor: 'rgba(239, 68, 68, 0.4)', borderColor: 'rgba(239, 68, 68, 0.2)', borderWidth: 1 },
+  stopText: { color: 'white', fontSize: 10, fontWeight: '900', letterSpacing: 1 }
 });

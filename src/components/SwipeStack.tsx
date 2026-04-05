@@ -7,9 +7,10 @@ import Animated, {
   withSpring, 
   runOnJS,
   interpolate,
-  Extrapolation
+  Extrapolation,
+  SharedValue
 } from 'react-native-reanimated';
-import { User, Users, Baby, ChevronRight, ChevronLeft, ChevronDown, CheckCircle } from 'lucide-react-native';
+import { User, Users, Baby, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, CheckCircle } from 'lucide-react-native';
 import { glassStyles, GLASS_COLORS } from '../theme/glass';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -48,9 +49,9 @@ export const SwipeStack: React.FC<SwipeStackProps> = ({ queue, onSwipe }) => {
       
       {/* Help Indicators */}
       <View style={styles.indicators}>
-        <Indicator icon={<ChevronLeft size={14} color="#94a3b8" />} label="WOMEN" />
-        <Indicator icon={<ChevronDown size={14} color="#94a3b8" />} label="KIDS" />
-        <Indicator icon={<ChevronRight size={14} color="#94a3b8" />} label="MEN" />
+        <Indicator icon={<ChevronLeft size={14} color="#94a3b8" />} label="WOMAN" />
+        <Indicator icon={<ChevronUp size={14} color="#94a3b8" />} label="CHILD" />
+        <Indicator icon={<ChevronRight size={14} color="#94a3b8" />} label="MAN" />
       </View>
     </View>
   );
@@ -70,8 +71,8 @@ const SwipeCard: React.FC<{ image: string; onSwipe: (type: 'man' | 'woman' | 'ch
         const type = event.translationX > 0 ? 'man' : 'woman';
         translateX.value = withSpring(event.translationX > 0 ? SCREEN_WIDTH : -SCREEN_WIDTH);
         runOnJS(onSwipe)(type);
-      } else if (event.translationY > SWIPE_THRESHOLD) {
-        translateY.value = withSpring(SCREEN_HEIGHT);
+      } else if (Math.abs(event.translationY) > SWIPE_THRESHOLD) {
+        translateY.value = withSpring(event.translationY > 0 ? SCREEN_HEIGHT : -SCREEN_HEIGHT);
         runOnJS(onSwipe)('child');
       } else {
         translateX.value = withSpring(0);
@@ -99,10 +100,10 @@ const SwipeCard: React.FC<{ image: string; onSwipe: (type: 'man' | 'woman' | 'ch
   );
 };
 
-const AnimatedOverlay: React.FC<{ x: Animated.SharedValue<number>; y: Animated.SharedValue<number> }> = ({ x, y }) => {
+const AnimatedOverlay: React.FC<{ x: SharedValue<number>; y: SharedValue<number> }> = ({ x, y }) => {
   const manOpacity = useAnimatedStyle(() => ({ opacity: interpolate(x.value, [0, 100], [0, 1], Extrapolation.CLAMP) }));
   const womanOpacity = useAnimatedStyle(() => ({ opacity: interpolate(x.value, [0, -100], [0, 1], Extrapolation.CLAMP) }));
-  const childOpacity = useAnimatedStyle(() => ({ opacity: interpolate(y.value, [0, 100], [0, 1], Extrapolation.CLAMP) }));
+  const childOpacity = useAnimatedStyle(() => ({ opacity: interpolate(Math.abs(y.value), [0, 100], [0, 1], Extrapolation.CLAMP) }));
 
   return (
     <>
